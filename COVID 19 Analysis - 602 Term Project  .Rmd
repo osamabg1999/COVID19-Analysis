@@ -1,0 +1,895 @@
+---
+title: |
+  <div style="text-align:center;">Project Report: COVID-19 Analysis in Mexico</div>
+subtitle: |
+  <div style="text-align:center;">DATA 602: Statistical Data Analysis</div>
+author: |
+  <div style="text-align:center;">Kanwarpal Singh (30232373), Faiq Mohd Zulkarnain (30207865), Osama Bilgrami (30213085), Arteen Rafiei (30043409)</div>
+output: 
+  html_document:
+    theme: cosmo
+    toc: true
+    toc-title: "Table of Contents"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+options(scipen=999)
+
+library(ggplot2)
+library(knitr)
+library(dplyr)
+library(mosaic)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+set.seed(1997)
+```
+
+<br><br>
+
+### **Introduction**
+
+Following the tremendous challenges posed by the COVID-19 pandemic,
+humanity has reached an important turning point in history, compelled to
+investigate, and comprehend the complexities of pandemics and their
+far-reaching implications. As we enter an era where the possibility of
+future pandemics looms large, it is critical that we strengthen our
+readiness and response processes. To that purpose, we are doing two
+independent but interconnected statistical analyses that have the
+potential to dramatically improve our capacity to predict the
+consequences of such events, similar to the COVID-19 pandemic.
+
+The fundamental goal of our analytical efforts is to reach conclusions
+that will allow us to delve deeper into the complex effects of pandemics
+on various aspects of human existence. Our primary focus is on the
+investigation of crucial characteristics such as age, habits, and
+comorbidities, which have emerged as critical determinants in the
+evolution and outcome of pandemics. We hope to untangle the deep link
+between these parameters and the trajectory of pandemic-related outcomes
+through careful investigation and synthesis of multiple data sources.
+
+Our first statistical test delves into hypothesis testing. Here, we aim
+to determine whether individuals aged 60 and older experience a more
+significant impact and higher mortality rates in comparison to those
+aged 18 and below due to COVID. In this context, our null hypothesis
+asserts that there is no difference in the proportion of COVID-related
+deaths between individuals above 60 and those below 18, with the
+difference being equal to 0. Conversely, our alternative hypothesis
+suggests that the mean difference is greater than 0, indicating a higher
+impact and mortality rate among the elderly.
+
+In our second statistical test, we focus on investigating potential
+associations between an individual's number of pre-existing health
+conditions and various aspects of COVID. This includes examining the
+likelihood of testing positive for the virus and mortality. Moreover, we
+aim to explore how comorbidities interact with factors such as age and
+gender. The objective here is to unveil the relationships and
+dependencies that exist between these variables.
+
+The findings of these statistical investigations are not only
+significant in and of themselves, but also have implications for
+healthcare and policy. They have the potential to serve as the
+foundation for developing more targeted and effective response tactics.
+We hope to provide vital information to government officials, healthcare
+professionals, and policymakers by identifying the persons most
+vulnerable to the negative impacts of pandemics. In doing so, we hope to
+give them the skills they need to make informed decisions, allocate
+resources wisely, and prioritize treatments for individuals who are at a
+higher risk than others.
+
+<br>
+
+### **Dataset**
+
+The dataset, generously provided by the Mexican government, has been
+made accessible on Kaggle and has been licensed as a CC0 Public Domain
+License, allowing users unrestricted utilization. Translated by a Kaggle
+user, this semi-structured dataset boasts 1,048,576 unique rows and 21
+features encompassing anonymized patient-related information, including
+pre-existing conditions. The data exhibit a predominantly boolean
+format, utilizing 0 to denote male and 1 for female. Similarly,
+pre-existing conditions are also encoded as boolean values, with 0
+signifying an absence and 1 indicating a presence.
+
+There are also presence of scaled data types ranging from 1 to 5, such
+as the COVID severity classification, contributing to the dataset's
+richness. Additionally, values of 97 and 99 under any feature serve as
+indicators of missing data. This comprehensive dataset thus presents a
+valuable resource for researchers and data enthusiasts alike, offering
+insights into the intricate landscape of patient profiles and health
+conditions in the Mexican context.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+df = read.csv('coviddataset.csv')
+head(df, 5)
+```
+
+<br>
+
+### **Data Cleaning & Wrangling**
+
+We went through several steps to clean up and prepare the data for
+further analysis. Null values, which are frequently represented as
+numbers, were replaced with "NA," as this prevents missing data from
+distorting later analysis. Furthermore, additional features were
+cleverly designed to help with deeper insights, such as the generation
+of age brackets based on predetermined boundaries, segmenting the data
+into '0-13,' '14-19,' '20-35,' '36-49,' and '50+' age groupings.
+Standardizing data representation is crucial for ensuring consistency in
+the dataset. For instance, patient types were converted from '1' and '2'
+to '0' and '1', and sex was converted to 'male' and 'female'. To
+facilitate more comprehensive analysis, we introduced additional
+columns. One such column categorizes comorbidities and the number of
+diseases. Additionally, we create a 'mortality' column that classifies
+individuals as either 'Dead' or 'Alive,' and a 'covid_test_result'
+column that categorizes test outcomes as 'Positive' or 'Negative.'
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+names(df) = tolower(names(df))
+
+#df$icu[df$icu %in% c(97, 98, 99)] = NA
+df[df == 97] = NA
+df[df == 98] = NA
+df[df == 99] = NA
+
+df$date_died[df$date_died == '9999-99-99'] = NA
+
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+cols_to_replace = c('sex', 'intubed', 'pneumonia', 'pregnant', 'diabetes', 'copd', 'asthma', 'inmsupr', 'hipertension', 'other_disease', 'cardiovascular', 'obesity', 'renal_chronic', 'tobacco', 'icu')
+
+# Replace all occurrences of 2 with 0 in the specified columns
+df = df %>% mutate(across(all_of(cols_to_replace), ~ifelse(. == 2, 0, .)))
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+df$sex[df$sex == 0] <- "male"
+df$sex[df$sex == 1] <- "female"
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+df$patient_type[df$patient_type == 1] = 0
+df$patient_type[df$patient_type == 2] = 1
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+breaks <- c(0, 13, 19, 35, 49, 70, 150)
+labels <- c('0-13', '14-19', '20-35', '36-49', '50-70', '70+')
+
+df$age_range <- cut(df$age, breaks = breaks, labels = labels, include.lowest = TRUE)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+cols_to_sum = c('pneumonia', 'diabetes', 'copd', 'asthma', 'inmsupr', 'hipertension', 'other_disease', 'cardiovascular', 'renal_chronic')
+
+# Create a new column 'number_of_disease' with the sum of selected columns
+df = df %>% mutate(number_of_disease = rowSums(select(., all_of(cols_to_sum))))
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+df$mortality = ifelse(is.na(df$date_died), "Alive", "Dead")
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+df$covid_test_result = cut(df$clasiffication_final, breaks = c(0, 3, 8), labels = c("Positive", "Negative"))
+df$covid_test_result = as.factor(df$covid_test_result)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+df$covid_severity = cut(df$clasiffication_final, breaks = c(0, 1, 2, 3, 8), labels = c("High", "Medium", "Low", "Negative"))
+df$covid_severity = as.factor(df$covid_severity)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+head(df, 5)
+```
+
+<br>
+
+### **Data Analysis**
+
+<br>
+
+#### ***Initial Exploratory Data Analysis***
+
+<br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+
+ggplot(data=filter(df, (covid_test_result == "Positive")), aes(x=mortality, y=age, color = mortality, fill = mortality)) + geom_violin(na.rm=TRUE) + geom_boxplot(fill = "white", width=0.1, na.rm=TRUE) + ylab("Age") + ggtitle("Age Distribution by Mortality: Violin Plot") + scale_color_manual(values = c("Alive" = "darkgreen", "Dead" = "#cc0000")) + scale_fill_manual(values = c("Alive" = "#d9ead3", "Dead" = "#f4cccc")) + coord_flip()
+```
+
+This violin plot illustrates the distribution of ages for two groups:
+those who are "Alive" and those who are "Dead". The width of each violin
+represents the density of data points at a given age. In summary, living
+individuals in this dataset tend to be younger, mostly between 25-50,
+while deceased individuals were mostly aged between 50-75 when they
+passed away.
+
+<br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data=filter(df, (covid_test_result == "Positive")), aes(x=mortality, y=number_of_disease, color = mortality, fill = mortality)) + geom_violin(na.rm=TRUE) + geom_boxplot(fill = "white", width=0.1, na.rm=TRUE) + ylab("number_of_disease") + ggtitle("Number of Diseases Distribution by Mortality: Violin Plot") + scale_color_manual(values = c("Alive" = "darkgreen", "Dead" = "#cc0000")) + scale_fill_manual(values = c("Alive" = "#d9ead3", "Dead" = "#f4cccc")) + coord_flip()
+```
+
+The violin plot showcases the distribution of the number of diseases
+among individuals based on their mortality status. Living individuals
+(in green) primarily have zero diseases, with a small distribution
+around one disease. In contrast, deceased individuals (in red) display a
+more spread-out distribution, primarily around one to three diseases,
+with some having up to around eight diseases.
+
+<br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+sample_df = sample(df, 10000, replace=TRUE)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=filter(sample_df, (covid_test_result == "Positive")), aes(x = age, y = number_of_disease, color=mortality)) + geom_point(size=1,position = position_jitter(width = 0.2, height = 0.2)) + scale_color_manual(values = c("Alive" = "#0d9962", "Dead" = "#922e41")) + xlab("Age") + ylab("Number of Prior Diseases") + ggtitle("Scatterplot of Number of Prior Diseases to Age - by Mortality (For a random sample of 10000)")
+```
+
+The scatterplot, based on 10,000 sampled data, depicts the relationship
+between age and the number of prior diseases, differentiated by
+mortality status. Alive individuals (in green) predominantly have fewer
+diseases across all age groups, with a concentration at zero diseases.
+Deceased individuals (in red) tend to have a wider range of diseases,
+with a notable increase in disease count as age advances, especially
+past 50.
+
+<br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=filter(sample_df, (covid_test_result == "Positive")), aes(x = age, y = number_of_disease, color=mortality)) + geom_point(size=1,position = position_jitter(width = 0.2, height = 0.2)) + scale_color_manual(values = c("Alive" = "#0d9962", "Dead" = "#922e41")) + xlab("Age") + ylab("Number of Prior Diseases") + ggtitle("Scatterplot of Number of Prior Diseases to Age - by Mortality (For a random sample of 10000)") + facet_wrap(~ mortality) + geom_smooth(method="lm")
+```
+
+We separated the scatterplot into two groups to help analyze it better.
+The scatterplot visually separates data on age and the number of prior
+diseases based on mortality status. For alive individuals (in green),
+there's a mild positive correlation between age and diseases, but it's
+less pronounced. In contrast, deceased individuals (in red) exhibit a
+clearer upward trend, suggesting a stronger correlation between age and
+the number of diseases they had.
+
+<br><br>
+
+#### ***1st Statistical Test - Hypothesis Testing***
+
+<br>
+
+$$
+\rm H_0: P_{Age \geq 60} - P_{Age \leq 18} = 0
+\\
+\rm H_A: P_{Age \geq 60} - P_{Age \leq 18} > 0
+$$
+
+In order to test the stated null hypothesis we will conduct a 2-sample
+test for equality of proportions without continuity correction via a
+prop.test() to check if the proportions of deaths among the different
+age groups are the same.
+
+We start by focusing on data from people who have actually tested
+positive for COVID-19 and break it down further to look closely at
+different age groups: one for seniors aged 60 and over, and another for
+kids and teens under 18. By doing this step-by-step, we're making
+special sets of data just for these particular age groups among those
+who have caught the virus. This way, we can really zero in on what's
+happening with the oldest and youngest folks who are dealing with
+COVID-19, giving us a clearer picture within the larger group of
+everyone who's tested positive.
+
+```{r}
+sub_df_pos = df %>% filter(covid_test_result == 'Positive')
+sub_df_60 = sub_df_pos %>% filter(age >= 60)
+sub_df_18 = sub_df_pos %>% filter(age <= 18)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+length(sub_df_pos$age)
+n.age_60 = length(sub_df_60$mortality)
+n.age_18 = length(sub_df_18$mortality)
+
+x.age_60 = favstats(~age, data=filter(sub_df_60,mortality == "Dead"))$n
+x.age_18 = favstats(~age, data=filter(sub_df_18,mortality == "Dead"))$n
+
+n.age_60
+n.age_18
+x.age_60
+x.age_18
+```
+
+<br> ***Prop-Test***
+
+```{r}
+prop.test(c(x.age_60, x.age_18), c(n.age_60, n.age_18), alternative='two.sided', correct=FALSE)
+```
+
+Test Results \\ P-value: 0.0000 \\ 95% confidence interval: [0.3801,
+0.3886]
+
+We are able to compute $P$-value of $2.2 \times e^{-16}$, which is the
+lowest possible $P$-value. This value being less than the level of
+significance of 0.05 implies a rejection of the null hypothesis.
+
+Thanks to our large dataset, the prop.test() also computes a compact and
+accurate 95% confidence interval of [0.3801, 0.3886].
+
+Therefore, based on the data, we can infer that the proportion of COVID
+deaths among the 60+ age group is significantly higher than the under 18
+age group. Furthermore, we can be 95% confident that the proportion of
+60+ COVID deaths is greater than the sub 18 age group by 0.3801-0.3886.
+This encompasses the observed difference in mortality rates of 0.3844.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+data.60 = c(rep(0, n.age_60-x.age_60), rep(1, x.age_60))
+data.18 = c(rep(0, n.age_18-x.age_18), rep(1, x.age_18))
+
+condition = c(rep(c(">= 60"), n.age_60), rep(c("<= 18"), n.age_18))
+used = c(data.60, data.18)
+
+mortality = data.frame(condition, used)
+
+mortality60 = filter(mortality, condition==">= 60")
+mortality18 = filter(mortality, condition=="<= 18")
+
+phat.60 = numeric(1000)
+phat.18 = numeric(1000)
+phat.60_18 = numeric(1000)
+
+for(i in 1:1000){
+  phat.60[i] = sum(sample(mortality60$used, n.age_60, replace=TRUE))/n.age_60
+  phat.18[i] = sum(sample(mortality18$used, n.age_18, replace=TRUE))/n.age_18
+  
+  phat.60_18[i] = phat.60[i] - phat.18[i]
+}
+phat.60_18.df = data.frame(phat.60, phat.18, phat.60_18)
+```
+
+Calculating the actual/observed difference in COVID mortality rates of
+individuals 60 and over and individuals 18
+
+```{r}
+actual.60_18 = (x.age_60 / n.age_60) - (x.age_18 / n.age_18)
+actual.60_18
+```
+
+<br>
+
+To get a better picture of this confidence interval we have also decided
+to compute a 95% confidence interval via bootstrapping.
+
+The following shows a distribution for 1000 bootstraps difference in
+mortality rate:
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(phat.60_18.df, aes(phat.60_18)) + geom_histogram(col="#45818e", fill= "#9ef2e4", ) + xlab("P{Age >= 60} - P{Age <= 18}") + ggtitle("Distribution for 1000 Bootstrap Difference in Mortality Rate \nP{Age >= 60} - P{Age <= 18}") + geom_vline(xintercept = actual.60_18, col="#e40909")
+```
+
+With this bootstrap method we can determine the 95% confidence intervals
+for difference in proportions of mortality rates, mortality rates of the
+60+ age group and sub 18 age group.
+
+<br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot(data=phat.60_18.df, aes(sample=phat.60_18)) + stat_qq(col="midnightblue") + stat_qqline(col="red") + ggtitle("Normal Probability Plot of Bootstrap value of Difference of mortality rate")
+```
+
+Based on a probability plot of differences computed, it appears to
+follow a normal distribution as the data points in this plot are located
+approximately along a straight line, it can be concluded that the
+selected distribution correctly represents the data.
+
+<br>
+
+**95% confidence interval for Difference between**
+$P_{Age \geq 60} - P_{Age \leq 18}$
+
+```{r}
+qdata(~phat.60_18, c(0.025,0.975), data=phat.60_18.df)
+```
+
+Based on this 95% confidence interval via bootstrapping we can be 95%
+confident that the difference in COVID mortality rates of individuals 60
+and over and individuals 18 and under is between 0.3802 and 0.3886. This
+reaffirms the outcome obtained from the prop.test previously conducted
+and the observed difference of 0.3844.
+
+<br>
+
+**95% confidence interval for** $P_{Age \geq 60}$
+
+```{r}
+qdata(~phat.60, c(0.025,0.975), data=phat.60_18.df)
+```
+
+Based on this 95% confidence interval via bootstrapping we can be 95%
+confident that the COVID mortality rate of individuals 60 and over is
+between 0.3986 and 0.4056. This confidence interval encompasses the
+observed mortality rate of 31015/77113 = 0.4022.
+
+<br>
+
+**95% confidence interval for** $P_{Age \leq 18}$
+
+```{r}
+qdata(~phat.18, c(0.025,0.975), data=phat.60_18.df)
+```
+
+Based on this 95% confidence interval via bootstrapping we can be 95%
+confident that the COVID mortality rate of individuals 18 and under is
+between 0.0153 and 0.0203. This confidence interval encompasses the
+observed mortality rate of 205/11520 = 0.0178.
+
+Here we can visualize the differences in mortality rates between the
+different age groups.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+combined_df_60_18 = bind_rows(sub_df_60 %>% mutate(Dataset = "Age >= 60"),sub_df_18 %>% mutate(Dataset = "Age <= 18"))
+
+head(combined_df_60_18,5)
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = combined_df_60_18, aes(x = Dataset, fill = mortality)) +
+  geom_bar( position = "dodge", width = 0.6) +
+  scale_fill_manual(values = c("Alive" = "#0d9962", "Dead" = "#922e41")) +
+  ylab("Patient count") +
+  xlab("Dataset") +
+  ggtitle("Bar plot: Mortality vs Age groups") +
+  theme_minimal()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = combined_df_60_18, aes(x = Dataset, fill = mortality)) +
+  geom_bar(position = "fill", width = 0.5) +
+  scale_fill_manual(values = c("Alive" = "#0d9962", "Dead" = "#922e41")) + 
+  ylab("Proportion") + 
+  xlab("Dataset") +
+  ggtitle("Stacked Bar Plot: Mortality vs Age Group (Proportions)") +
+  theme_minimal()
+```
+
+<br><br>
+
+#### ***2nd Statistisal Test - Chi-squared Test of Independence***
+
+<br> $$
+\rm H_0: \text{Co-Morbidities and the factors of interest are independent}
+\\
+\rm H_A: \text{Co-Morbidities and the factors of interest are dependent}
+$$
+
+As COVID has been heavily associated with co-morbidities, we want to
+determine if there is any correlation between the number of diseases
+among an individual and COVID attributes such as whether someone will
+test positive for COVID and mortality. We will also explore the
+correlation of co-morbidities with age and gender.
+
+It is important to note that when conducting the following Chi-Square
+tests for the whole dataset, the p-values for every test will fall well
+below the 0.05 level of significance. This capability stems from our
+extensive dataset, allowing us to calculate highly precise p-values and
+confidence intervals, as exemplified in the preceding hypothesis test.
+Consequently, R will approach a lower limit of 2.2e-15 for the computed
+p-value. Likewise, enabling simulated p-values yields a consistent value
+of 0.0004998 across all Chi-Square tests. Given this outcome, we've
+chosen to investigate Chi-square test results using samples comprised of
+500 data points.
+
+<br>
+
+**First let's take a look at whether a correlation exists between number
+of diseases among an individual and status (testing positive for
+COVID)**
+
+$$
+\rm H_0: \text{Number of Disease an individual has and their Covid Test Result are independent}
+\\
+\rm H_A: \text{Number of Disease an individual has and their Covid Test Result are not independent}
+$$
+
+<br> Contingency Table
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+
+covid_test.df = subset(df, select = c(number_of_disease,covid_test_result))
+covid_test.df = covid_test.df[complete.cases(covid_test.df), ]
+
+sample.df = sample(covid_test.df, 500, replace=TRUE)
+covid_test = tally(~number_of_disease + covid_test_result, data = sample.df)
+covid_test
+```
+
+Chisq Result
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+chi1 = chisq.test(covid_test, simulate.p.value=TRUE)
+chi1
+
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+p.covid_test = chi1$p.value
+test_stat.covid_test = chi1$statistic
+
+p.covid_test
+test_stat.covid_test
+```
+
+Given the $P$-value of 0.001499 being less than the significance level
+of 0.05, we reject the null hypothesis. This means that based on the
+COVID sample data, there is enough evidence to suggest a significant
+association between the number of diseases an individual has and their
+likelihood of testing positive for COVID.
+
+<br>
+
+We can visualize the COVID test results based on the number of diseases
+as shown here.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = covid_test.df, aes(x = number_of_disease, fill = covid_test_result)) +
+  geom_bar( position = "dodge", width = 0.6) +
+  scale_fill_manual(values = c("Positive" = "#efb914", "Negative" = "#432297")) +
+  ylab("Patient count") +
+  xlab("Number of Prior Diseases") +
+  ggtitle("Bar plot: Covid Test Result vs Number of prior diseases") +
+  theme_minimal()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = covid_test.df, aes(x = number_of_disease, fill = covid_test_result)) +
+  geom_bar(position = "fill", width = 0.6) +
+  scale_fill_manual(values = c("Positive" = "#efb914", "Negative" = "#432297")) + 
+  ylab("Proportion") + 
+  xlab("Number of Prior Diseases") +
+  ggtitle("Stacked Bar Plot: Covid Test Result vs Number of prior diseases (Proportions)") +
+  theme_minimal()
+```
+
+<br><br>
+
+**We take a look at whether a correlation exists between the number of
+prior diseases among an individual and the severity of COVID symptoms**
+
+$$
+\rm H_0: \text{Number of Disease an individual has and Severity of COVID Symptoms are independent}
+\\
+\rm H_A: \text{Number of Disease an individual has and Severity of COVID Symptoms are not independent}
+$$ <br> Contingency Table
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+severity.df = subset(sub_df_pos, select = c(number_of_disease, covid_severity))
+severity.df = severity.df[complete.cases(severity.df), ]
+
+sample2.df = sample(severity.df, 500, replace=TRUE)
+severity = tally(~number_of_disease + covid_severity, data = sample2.df)
+severity = severity[, -4]
+severity
+```
+
+Chisq Result
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+chi2 = chisq.test(severity, simulate.p.value = TRUE)
+chi2
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+p.severity = chi2$p.value
+test_stat.severity = chi2$statistic
+
+p.severity
+test_stat.severity
+```
+
+Given the $P$-value of 0.3393 being more than the significance level of
+0.05, we fail to reject the null hypothesis. This means that based on
+the COVID sample data, there is not enough evidence to suggest a
+significant association between the number of diseases an individual has
+and their likelihood of testing positive for COVID.
+
+In the context of this research, while the $P$-value for this particular
+sample stands at more than 0.05, indicating a lack of statistical
+significance, the $P$-value derived from the entire population data is
+less than 0.05. Although the sample suggests no significant
+relationship, the aggregate population data tells a different story,
+highlighting a statistically significant association.
+
+We can visualize the COVID Severity based on the number of diseases as
+shown here. <br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = severity.df, aes(x = number_of_disease, fill = covid_severity)) +
+  geom_bar( position = "dodge", width = 0.6) +
+
+  ylab("Patient count") +
+  xlab("Covid Severity") +
+  ggtitle("Bar plot: Covid Severity vs Number of prior diseases") +
+  theme_minimal()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = severity.df, aes(x = number_of_disease, fill = covid_severity)) +
+  geom_bar(position = "fill", width = 0.6) +
+   
+  ylab("Proportion") + 
+  xlab("Covid Severity") +
+  ggtitle("Stacked Bar Plot: Covid Severity vs Number of prior diseases (Proportions)") +
+  theme_minimal()
+```
+
+<br><br>
+
+**We examine whether there is a correlation between the number of
+previous diseases in an individual and their Mortality Rate.**
+
+$$
+\rm H_0: \text{Number of Disease an individual has and Mortality are independent}
+\\
+\rm H_A: \text{Number of Disease an individual has and Mortality are not independent}
+$$ <br> Contingency Table
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+mortality.df = subset(sub_df_pos, select = c(number_of_disease, mortality))
+mortality.df = mortality.df[complete.cases(mortality.df), ]
+
+sample3.df = sample(mortality.df, 500, replace=TRUE)
+mortality = tally(~number_of_disease + mortality, data = sample3.df)
+mortality
+```
+
+Chisq Result
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+chi3 = chisq.test(mortality, simulate.p.value = TRUE)
+chi3
+
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+p.mortality = chi3$p.value
+test_stat.mortality = chi3$statistic
+
+p.mortality
+test_stat.mortality
+```
+
+The computed $P$-value of 0.0004998 is also well below the 0.05
+significance level threshold. This leads to the conclusion that we would
+reject the null hypothesis. Thus, based on the COVID data, there is a
+statistically significant association between the number of diseases an
+individual has and their mortality. The number of diseases and mortality
+are not independent; there exists a relationship between them.
+
+We can visualize the Mortality based on the number of diseases as shown
+here. <br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = mortality.df, aes(x = number_of_disease, fill = mortality)) +
+  geom_bar( position = "dodge", width = 0.6) +
+  scale_fill_manual(values = c("Alive" = "#0d9962", "Dead" = "#922e41")) +
+  ylab("Patient count") +
+  xlab("Mortality") +
+  ggtitle("Bar plot: Mortality vs Number of prior diseases") +
+  theme_minimal()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = mortality.df, aes(x = number_of_disease, fill = mortality)) +
+  geom_bar(position = "fill", width = 0.6) +
+  scale_fill_manual(values = c("Alive" = "#0d9962", "Dead" = "#922e41")) + 
+  ylab("Proportion") + 
+  xlab("Mortality") +
+  ggtitle("Stacked Bar Plot: Mortality vs Number of prior diseases (Proportions)") +
+  theme_minimal()
+```
+
+<br><br>
+
+**Now, we check whether there is a correlation between the number of
+prior diseases among an individual and the Age range they belong to**
+
+$$
+\rm H_0: \text{Number of Disease an individual has and their Age Group are independent}
+\\
+\rm H_A: \text{Number of Disease an individual has and their Age Group are not independent}
+$$ <br> Contingency Table
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+age_range.df = subset(sub_df_pos, select = c(number_of_disease, age_range))
+age_range.df = age_range.df[complete.cases(age_range.df), ]
+
+sample4.df = sample(age_range.df, 500, replace=TRUE)
+age_range = tally(~number_of_disease + age_range, data = sample4.df)
+age_range
+```
+
+Chisq Result
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+chi2 = chisq.test(age_range, simulate.p.value = TRUE)
+chi2
+
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+p.age_range = chi2$p.value
+test_stat.age_range = chi2$statistic
+
+p.age_range
+test_stat.age_range
+```
+
+Given the $P$-value is 0.0009995, which is well below the significance
+level of 0.05, we would reject the null hypothesis. This means that
+based on the COVID sample data, there is a statistically significant
+association between the number of diseases an individual has and their
+age group. In other words, age group and the number of diseases are not
+independent; there is a relationship between them.
+
+Here is a visualization that shows the counts and proportions of
+different age ranges and the number of diseases an individual has among
+those age groups. <br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = age_range.df, aes(x = number_of_disease, fill = age_range)) +
+  geom_bar( position = "dodge", width = 0.6) +
+
+  ylab("Patient count") +
+  xlab("Number of Prior Diseases") +
+  ggtitle("Bar plot: Age Range vs Number of prior diseases") +
+  theme_minimal()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = age_range.df, aes(x = number_of_disease, fill = age_range)) +
+  geom_bar(position = "fill", width = 0.6) +
+   
+  ylab("Proportion") + 
+  xlab("Number of Prior Diseases") +
+  ggtitle("Stacked Bar Plot: Age Range vs Number of prior diseases (Proportions)") +
+  theme_minimal()
+```
+
+<br><br>
+
+**Finally, let's take a look at whether a correlation exists between
+number of prior diseases among an individual and their Gender**
+
+$$
+\rm H_0: \text{Number of Disease an individual has and their Gender is independent}
+\\
+\rm H_A: \text{Number of Disease an individual has and their Gender is not independent}
+$$ <br> Contingency Table
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+sex.df = subset(sub_df_pos, select = c(number_of_disease, sex))
+sex.df = sex.df[complete.cases(sex.df), ]
+
+sample5.df = sample(sex.df, 500, replace=TRUE)
+sex = tally(~number_of_disease + sex, data = sample5.df)
+sex
+```
+
+Chisq Result
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+chi4 = chisq.test(sex, simulate.p.value = TRUE)
+chi4
+
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, results=FALSE}
+p.sex = chi4$p.value
+test_stat.sex = chi4$statistic
+
+p.sex
+test_stat.sex
+```
+
+Given the $P$-value of 0.7216 being more than the significance level of
+0.05, we fail to reject the null hypothesis. This means that based on
+the COVID sample data, there is not enough evidence to suggest a
+significant association between the number of diseases an individual has
+and their gender.
+
+Here is a visualization that shows the counts and proportions of Gender
+and the number of diseases an individual has. <br>
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = sex.df, aes(x = number_of_disease, fill = sex, group = sex)) +
+  geom_bar( position = "dodge", width = 0.6) +
+  scale_fill_manual(values = c("female" = "#cc3177", "male" = "#1263ac")) +
+  ylab("Patient count") +
+  xlab("Gender") +
+  ggtitle("Bar plot: Gender vs Number of prior diseases") +
+  theme_minimal()
+```
+
+```{r, echo=FALSE, error=FALSE, message=FALSE}
+ggplot(data = sex.df, aes(x = number_of_disease, fill = sex, group = sex)) +
+  geom_bar(position = "fill", width = 0.6) +
+  scale_fill_manual(values = c("female" = "#cc3177", "male" = "#1263ac")) + 
+  ylab("Proportion") + 
+  xlab("Gender") +
+  ggtitle("Stacked Bar Plot: Gender vs Number of prior diseases (Proportions)") +
+  theme_minimal()
+```
+
+### **Conclusion**
+
+The findings from both traditional proportion tests and bootstrap
+methods indicate that individuals aged 60 and above have a significantly
+higher mortality rate due to COVID-19 compared to individuals aged 18
+and under. Both tests reaffirm the observed differences within the
+dataset thanks to the tight 95% confidence intervals.
+
+Our Chi-Square tests provided insights on comorbidities and other
+factors of interest. With the entire dataset of around 1.5 million data
+points at our disposal, we were able to compute a near zero $P$-value
+across all Chi-Square tests. Given the substantial number of data points
+we input into the chi-squared test, it is anticipated that it may detect
+some form of association between the factors, even if this association
+is influenced by external variables.
+
+As anticipated, the results indeed revealed a significant link between
+the quantity of pre-existing health conditions and several variables,
+including COVID-19 test outcomes, COVID-19 severity, age, and gender.
+Furthermore, a noteworthy connection was established between
+comorbidities and the mortality rate, with mortality rates rising as the
+number of comorbidities increased.
+
+To generate more realistic insights, we reproduced our studies by
+analyzing 500 random data points. While the majority of the results were
+similar to those obtained from assessments of the complete dataset,
+several variations led to different conclusions. Notably, our
+investigation indicated that severity and gender appeared to be
+uncorrelated with comorbidities. This finding, based on our sample
+approach, lends credence to the claim that it constitutes a more
+accurate conclusion. As we have seen, the large size of the dataset can
+make Chi-square tests prone to consistently identify relationships. This
+assumption is supported by the graphical representation, which clearly
+indicates independence between gender and comorbidities, as well as
+between comorbidities and severity. Consequently, our findings support
+the notion that employing a sampling approach may enhance the accuracy
+of Chi-square tests, particularly in contexts where the sensitivity of
+these tests in large datasets can inadvertently indicate relationships.
+
+Our study underscores the profound impact of age and comorbidities on
+COVID-19 outcomes, emphasizing the need for targeted interventions,
+especially for older individuals and those with multiple diseases.
+
+\newpage
+
+### **References**
+
+-   Loza, A., Wong-Chew, R. M., Jiménez-Corona, M.-E., Zárate, S.,
+    López, S., Ciria, R., Palomares, D., García-López, R., Iša, P.,
+    Taboada, B., Rosales, M., Boukadida, C., Herrera-Estrella, A.,
+    Mojica, N. S., Rivera-Gutierrez, X., Muñoz-Medina, J. E.,
+    Salas-Lais, A. G., Sanchez-Flores, A., Vazquez-Perez, J. A., ...
+    Gutiérrez-Ríos, R. M. (2023). Two-year follow-up of the COVID- 19
+    pandemic in Mexico. Frontiers in Public Health, 10,
+    1050673.https://doi.org/10.3389/fpubh.2022.1050673
+
+-   Nizri, M. (2023). COVID-19 Dataset [Data set]. Kaggle. Retrieved
+    October 17, 2023, from
+    <https://www.kaggle.com/datasets/meirnizri/covid19-dataset>
+
+-   Secretaría de Salud (Mexico). (2023). Información referente a casos
+    COVID-19 en México [Data set]. Gobierno de México. Retrieved October
+    17, 2023, from
+    <https://datos.gob.mx/busca/dataset/informacion-referente-a-casos-covid-19-en-mexico>
+
+\newpage
+
+### **Appendix: All code for this report**
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
